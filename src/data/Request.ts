@@ -206,8 +206,13 @@ type MdsResponse<T extends BaseServerObject> = {
 };
 
 export async function getFromServer<T extends BaseServerObject>(
-  className: string
-): Promise<Array<T>> {
+  className: string,
+  start = 0,
+  pagesize = 50,
+  sortBy = '',
+  descending = false,
+  filter = ''
+): Promise<MdsResponse<T>> {
   console.log('getdatafromserver:', className);
   if (!Object.keys(classMap).find((_) => _ == className)) {
     throw new Error(`Class ${className} not found`);
@@ -215,14 +220,17 @@ export async function getFromServer<T extends BaseServerObject>(
 
   const jsonfromserver = sampledata[className];
 
-  const response = await window.fetch(`${mdsBaseUrl}/${className}`, {
-    // learn more about this API here: https://graphql-pokemon2.vercel.app/
-    method: 'GET',
-    headers: {
-      'content-type': 'application/json;charset=UTF-8',
-      Authorization: `Basic ${btoa(`${username}:${password}`)}`,
-    },
-  });
+  const response = await window.fetch(
+    `${mdsBaseUrl}/${className}?start=${start}&limit=${pagesize}`,
+    {
+      // learn more about this API here: https://graphql-pokemon2.vercel.app/
+      method: 'GET',
+      headers: {
+        'content-type': 'application/json;charset=UTF-8',
+        Authorization: `Basic ${btoa(`${username}:${password}`)}`,
+      },
+    }
+  );
 
   const recs: Array<T> = [];
 
@@ -231,7 +239,7 @@ export async function getFromServer<T extends BaseServerObject>(
 
     try {
       mdsResonse.rows.forEach((x) => {
-        recs.push(createInstance(className, x as unknown as IBaseObjectProps));
+        x = createInstance(className, x as unknown as IBaseObjectProps);
       });
     } catch (Exception) {
       console.error('Error', Exception);
@@ -239,10 +247,13 @@ export async function getFromServer<T extends BaseServerObject>(
       console.log(
         `Result: ${mdsResonse.rows.length}/${mdsResonse.total_rows} from ${className}`
       );
-      return recs;
+      return mdsResonse;
     }
   } else {
     console.error('Error', response.status);
-    return recs;
+    return {
+      total_rows: 0,
+      rows: [] as Array<T>,
+    };
   }
 }

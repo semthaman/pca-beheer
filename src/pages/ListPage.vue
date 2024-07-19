@@ -8,13 +8,18 @@
         mooi zijn.
       </div>
       <q-table
-        style="height: 100%"
+        ref="tableRef"
+        style="height: 80vh"
         :title="props.collection"
         :rows="items"
         :columns="columns"
         row-key="_id"
         v-model:selected="selected"
+        v-model:pagination="pagination"
         selection="single"
+        :loading="loading"
+        virtual-scroll
+        @request="onRequest"
       />
       <!--
         TODO: IPV q-table, wellicht q-table in een custom component?
@@ -29,10 +34,11 @@
 
 <script setup lang="ts">
 import FormComponent from 'src/components/FormComponent.vue';
-import { computed, watch, ref } from 'vue';
+import { computed, watch, ref, onMounted } from 'vue';
 import { BaseServerObject } from 'src/data/Base/BaseObject';
 import { getFromServer } from 'src/data/Request';
 import { classMap, getColumns } from 'src/data/Base/ClassFactory';
+import { QTable } from 'quasar';
 
 defineOptions({
   name: 'IndexPage',
@@ -53,18 +59,69 @@ const formClass = computed(() => {
   return selected.value.length > 0 ? 'col-4' : 'col-0';
 });
 
+const tableRef = ref<QTable>();
+
 const items = ref<BaseServerObject[]>([]);
+const filter = ref('');
+const loading = ref(false);
+const pagination = ref({
+  sortBy: 'asc',
+  descending: false,
+  page: 1,
+  rowsPerPage: 50,
+  rowsNumber: 50,
+});
 
 const columns = computed(() => getColumns(props.collection));
 
+function onRequest(requestProps: any) {
+  const { page, rowsPerPage, sortBy, descending } = requestProps.pagination;
+  const filter = requestProps.filter;
+  console.log('onRequest', requestProps);
+  loading.value = true;
+
+  //pagination.value.rowsNumber = getRowsNumberCount(filter);
+
+  // get all rows if "All" (0) is selected
+  const fetchCount =
+    rowsPerPage === 0 ? pagination.value.rowsNumber : rowsPerPage;
+
+  // calculate starting row of data
+  const startRow = (page - 1) * rowsPerPage;
+
+  getFromServer<BaseServerObject>(
+    props.collection,
+    startRow,
+    fetchCount,
+    sortBy,
+    descending,
+    filter
+  ).then((_) => {
+    // update rowsCount with appropriate value
+    console.log(_);
+    // clear out existing data and add new
+    items.value = _.rows;
+
+    // don't forget to update local pagination object
+    pagination.value.page = page;
+    pagination.value.rowsPerPage = rowsPerPage;
+    pagination.value.sortBy = sortBy;
+    pagination.value.descending = descending;
+    pagination.value.rowsNumber = _.total_rows;
+
+    // ...and turn of loading indicator
+    loading.value = false;
+  });
+}
+
 const selected = ref<BaseServerObject[]>([]);
-getFromServer<BaseServerObject>(props.collection).then((_) => {
-  items.value = _;
-});
 
 watch(props, async (newProps, oldCollection) => {
-  getFromServer<BaseServerObject>(newProps.collection).then((_) => {
-    items.value = _;
-  });
+  tableRef.value?.requestServerInteraction();
+});
+
+onMounted(() => {
+  console.log('onMounted');
+  tableRef.value?.requestServerInteraction();
 });
 </script>
